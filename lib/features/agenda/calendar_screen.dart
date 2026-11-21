@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:recrea_app/core/widgets/auto_collapse_fab.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:table_calendar/table_calendar.dart'; // Paquete para la vista semanal móvil
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -435,17 +436,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
         return Scaffold(
           backgroundColor: RecreaTheme.fondoBase,
-          // Solo Admin y Maestra ven el botón de agregar evento en móvil
           floatingActionButton: (!isDesktop && _currentUserRole != 'padre')
-              ? FloatingActionButton.extended(
-                  heroTag: null,
-                  backgroundColor: RecreaTheme.rosa,
-                  foregroundColor: RecreaTheme.blanco,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text(
-                    'Nuevo Evento',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
+              ? AutoCollapseFab(
+                  label: 'Nuevo Evento',
                   onPressed: _showAddEventDialog,
                 )
               : null,

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../core/constants/app_theme.dart';
+import '../../core/widgets/auto_collapse_fab.dart';
 
 class SuppliesParentView extends StatefulWidget {
   const SuppliesParentView({super.key});
@@ -14,29 +14,24 @@ class SuppliesParentView extends StatefulWidget {
 class _SuppliesParentViewState extends State<SuppliesParentView> {
   final _supabase = Supabase.instance.client;
 
-  // IDs (UUID string) de los útiles que la maestra acaba de marcar localmente, pero aún no guarda
   final Set<String> _newlyCheckedIds = {};
   bool _isSaving = false;
 
   bool _isLoading = true;
   String _role = 'padre';
 
-  // Filtros
   String _parentFilter = 'todos';
   String _staffStudentFilter = 'todos';
   String _searchQuery = '';
 
-  // Datos para Admin y Maestra (Aulas -> Alumnos -> Utiles de cada alumno)
   List _classrooms = [];
   int? _selectedClassroomId;
   List _classroomStudents = [];
   Map _suppliesByStudent = {};
 
-  // Datos exclusivos para vista Padre
   Map? _myChild;
   List _myChildSupplies = [];
 
-  // Control de carga por item individual (para admin)
   final Set _updatingSupplyIds = {};
 
   @override
@@ -70,7 +65,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error al cargar lista de utiles: $e'),
+            content: Text('Error al cargar útiles: $e'),
             backgroundColor: RecreaTheme.rosa,
           ),
         );
@@ -119,6 +114,9 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     final List teacherRoomList = List.from(teacherRooms);
     if (teacherRoomList.isNotEmpty) {
       _classrooms = teacherRoomList;
+    } else {
+      final allRooms = await _supabase.from('classrooms').select('*').order('id');
+      _classrooms = List.from(allRooms);
     }
 
     if (_classrooms.isNotEmpty) {
@@ -152,9 +150,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     final Map tempMatrix = {};
 
     if (studentsList.isNotEmpty) {
-      final List studentIds = studentsList
-          .map((s) => s['id'].toString())
-          .toList();
+      final List studentIds = studentsList.map((s) => s['id'].toString()).toList();
 
       final allSuppliesRes = await _supabase
           .from('student_supplies')
@@ -188,8 +184,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       setState(() {
         _classroomStudents = studentsList;
         _suppliesByStudent = tempMatrix;
-        _newlyCheckedIds
-            .clear(); // Limpiamos selección pendiente al cambiar de aula
+        _newlyCheckedIds.clear();
       });
     }
   }
@@ -214,19 +209,16 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
         'Paquete de panos humedos',
       ];
       final List rows = defaultItems
-          .map(
-            (name) => {
-              'student_id': studentId,
-              'name': name,
-              'is_delivered': false,
-            },
-          )
+          .map((name) => {
+                'student_id': studentId,
+                'name': name,
+                'is_delivered': false,
+              })
           .toList();
       await _supabase.from('student_supplies').insert(rows);
     }
   }
 
-  // Método para guardar los útiles marcados por la maestra en lote
   Future<void> _saveBatchSupplies() async {
     if (_newlyCheckedIds.isEmpty) return;
 
@@ -235,17 +227,17 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       final String nowUtc = DateTime.now().toUtc().toIso8601String();
 
       for (String supplyId in _newlyCheckedIds) {
-        await _supabase
-            .from('student_supplies')
-            .update({'is_delivered': true, 'delivered_at': nowUtc})
-            .eq('id', supplyId);
+        await _supabase.from('student_supplies').update({
+          'is_delivered': true,
+          'delivered_at': nowUtc,
+        }).eq('id', supplyId);
       }
 
       if (mounted) {
         _newlyCheckedIds.clear();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Entregas de útiles guardadas correctamente.'),
+            content: Text('Entregas guardadas correctamente.'),
             backgroundColor: RecreaTheme.verde,
           ),
         );
@@ -256,10 +248,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al guardar entregas: $e'),
-            backgroundColor: RecreaTheme.rosa,
-          ),
+          SnackBar(content: Text('Error al guardar: $e'), backgroundColor: RecreaTheme.rosa),
         );
       }
     } finally {
@@ -267,18 +256,16 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     }
   }
 
-  // Manejo de pulsación individual (Admin puede alternar, maestra usa selección en lote)
   Future<void> _handleToggleSupply(Map supplyItem) async {
     if (_role == 'padre') return;
 
     final String supplyId = supplyItem['id'].toString();
     final bool currentlyDelivered = supplyItem['is_delivered'] == true;
 
-    // Si es maestra y ya está entregado en BD, no se puede modificar
     if (_role == 'maestra' && currentlyDelivered) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Útil ya registrado. No se puede desmarcar.'),
+          content: Text('Útil ya registrado. Solo Admin puede desmarcarlo.'),
           backgroundColor: RecreaTheme.amarillo,
           duration: Duration(seconds: 2),
         ),
@@ -286,13 +273,10 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       return;
     }
 
-    // Si es Admin, tiene libertad total de marcar/desmarcar al instante
     if (_role == 'admin') {
       if (_updatingSupplyIds.contains(supplyId)) return;
       final bool newState = !currentlyDelivered;
-      final String? newTimestamp = newState
-          ? DateTime.now().toUtc().toIso8601String()
-          : null;
+      final String? newTimestamp = newState ? DateTime.now().toUtc().toIso8601String() : null;
 
       setState(() {
         _updatingSupplyIds.add(supplyId);
@@ -301,31 +285,25 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       });
 
       try {
-        await _supabase
-            .from('student_supplies')
-            .update({'is_delivered': newState, 'delivered_at': newTimestamp})
-            .eq('id', supplyId);
+        await _supabase.from('student_supplies').update({
+          'is_delivered': newState,
+          'delivered_at': newTimestamp,
+        }).eq('id', supplyId);
       } catch (e) {
         setState(() {
           supplyItem['is_delivered'] = currentlyDelivered;
         });
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error: $e'),
-              backgroundColor: RecreaTheme.rosa,
-            ),
+            SnackBar(content: Text('Error: $e'), backgroundColor: RecreaTheme.rosa),
           );
         }
       } finally {
-        if (mounted) {
-          setState(() => _updatingSupplyIds.remove(supplyId));
-        }
+        if (mounted) setState(() => _updatingSupplyIds.remove(supplyId));
       }
       return;
     }
 
-    // Si es Maestra y NO está entregado, lo gestionamos de forma local para el botón de Guardar abajo
     if (_role == 'maestra' && !currentlyDelivered) {
       setState(() {
         if (_newlyCheckedIds.contains(supplyId)) {
@@ -341,7 +319,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     if (_classroomStudents.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('No hay alumnos en esta aula para asignarles útiles.'),
+          content: Text('No hay alumnos en esta aula.'),
           backgroundColor: RecreaTheme.amarillo,
         ),
       );
@@ -356,43 +334,23 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
         backgroundColor: RecreaTheme.blanco,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Text(
-          'Agregar Útil al Aula',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: RecreaTheme.oscuro,
-          ),
+          'Agregar Útil',
+          style: TextStyle(fontWeight: FontWeight.bold, color: RecreaTheme.oscuro),
         ),
         content: SizedBox(
           width: 400,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Este material se asignará a la lista de todos los alumnos del aula seleccionada.',
-                style: TextStyle(fontSize: 13, color: RecreaTheme.textoMudo),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: nameCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre del útil (Ej: Cartulina blanca x5)',
-                  prefixIcon: Icon(
-                    Icons.backpack_rounded,
-                    color: RecreaTheme.turquesa,
-                  ),
-                ),
-              ),
-            ],
+          child: TextField(
+            controller: nameCtrl,
+            decoration: const InputDecoration(
+              labelText: 'Nombre del útil (Ej: Cartulina x5)',
+              prefixIcon: Icon(Icons.backpack_rounded, color: RecreaTheme.turquesa),
+            ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text(
-              'Cancelar',
-              style: TextStyle(color: RecreaTheme.textoMudo),
-            ),
+            child: const Text('Cancelar', style: TextStyle(color: RecreaTheme.textoMudo)),
           ),
           ElevatedButton(
             onPressed: () async {
@@ -418,9 +376,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(
-                        '"$itemName" asignado a todos los alumnos del aula.',
-                      ),
+                      content: Text('"$itemName" asignado al aula.'),
                       backgroundColor: RecreaTheme.verde,
                     ),
                   );
@@ -428,17 +384,14 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
               } catch (e) {
                 if (mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error: $e'),
-                      backgroundColor: RecreaTheme.rosa,
-                    ),
+                    SnackBar(content: Text('Error: $e'), backgroundColor: RecreaTheme.rosa),
                   );
                 }
               } finally {
                 if (mounted) setState(() => _isLoading = false);
               }
             },
-            child: const Text('Asignar a todos'),
+            child: const Text('Asignar'),
           ),
         ],
       ),
@@ -449,7 +402,6 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: RecreaTheme.fondoBase,
-      // Botón flotante para guardar cambios si la maestra seleccionó nuevos útiles
       floatingActionButton: _role == 'maestra' && _newlyCheckedIds.isNotEmpty
           ? FloatingActionButton.extended(
               heroTag: null,
@@ -459,62 +411,43 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                   ? const SizedBox(
                       width: 20,
                       height: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
+                      child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
                     )
                   : const Icon(Icons.save_rounded),
-              label: Text(
-                _isSaving
-                    ? 'Guardando...'
-                    : 'Guardar ${_newlyCheckedIds.length} Entregas',
-              ),
+              label: Text(_isSaving ? 'Guardando...' : 'Guardar (${_newlyCheckedIds.length})'),
               onPressed: _isSaving ? null : _saveBatchSupplies,
             )
           : (_role == 'admin')
-          ? FloatingActionButton.extended(
-              heroTag: null,
-              backgroundColor: RecreaTheme.rosa,
-              foregroundColor: RecreaTheme.blanco,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text(
-                'Agregar Útil al Aula',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              onPressed: _showAddSupplyToClassroomDialog,
-            )
-          : null,
+              ? AutoCollapseFab(
+                  label: 'Agregar Útil',
+                  onPressed: _showAddSupplyToClassroomDialog,
+                )
+              : null,
       body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: RecreaTheme.turquesa),
-            )
+          ? const Center(child: CircularProgressIndicator(color: RecreaTheme.turquesa))
           : _role == 'padre'
-          ? _buildParentView()
-          : _buildStaffClassroomView(),
+              ? _buildParentView()
+              : _buildStaffClassroomView(),
     );
   }
 
   Widget _buildParentView() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
     if (_myChild == null) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24.0),
           child: Text(
-            'Aún no tienes un alumno matriculado vinculado a tu cuenta.',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: RecreaTheme.textoMudo,
-            ),
+            'Aún no tienes un alumno vinculado.',
+            style: TextStyle(fontWeight: FontWeight.bold, color: RecreaTheme.textoMudo),
           ),
         ),
       );
     }
 
     final int total = _myChildSupplies.length;
-    final int delivered = _myChildSupplies
-        .where((s) => s['is_delivered'] == true)
-        .length;
+    final int delivered = _myChildSupplies.where((s) => s['is_delivered'] == true).length;
     final int pending = total - delivered;
     final double progress = total == 0 ? 0.0 : delivered / total;
 
@@ -524,37 +457,31 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
       return true;
     }).toList();
 
-    final String childName =
-        '${_myChild!['first_names']} ${_myChild!['last_names']}';
-    final String roomName = _myChild!['classrooms']?['name'] ?? 'Aula asignada';
+    final String childName = '${_myChild!['first_names']} ${_myChild!['last_names']}';
+    final String roomName = _myChild!['classrooms']?['name'] ?? 'Aula';
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(24.0),
+      padding: EdgeInsets.all(isDesktop ? 24 : 16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Lista de Útiles',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.w900,
-              color: RecreaTheme.oscuro,
+          if (isDesktop) ...[
+            const Text(
+              'Útiles',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: RecreaTheme.oscuro),
             ),
-          ),
+            const SizedBox(height: 4),
+          ],
           Text(
-            'Alumno(a): $childName - $roomName',
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: RecreaTheme.turquesa,
-            ),
+            '$childName • $roomName',
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: RecreaTheme.turquesa),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.all(22),
+            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: RecreaTheme.blanco,
-              borderRadius: BorderRadius.circular(28),
+              borderRadius: BorderRadius.circular(24),
               border: Border.all(color: RecreaTheme.bordeClaro),
             ),
             child: Column(
@@ -564,58 +491,45 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Has entregado $delivered de $total útiles',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w900,
-                        fontSize: 16,
-                        color: RecreaTheme.oscuro,
-                      ),
+                      '$delivered de $total entregados',
+                      style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: RecreaTheme.oscuro),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: pending == 0
-                            ? RecreaTheme.verdeSuave
-                            : RecreaTheme.amarilloSuave,
-                        borderRadius: BorderRadius.circular(12),
+                        color: pending == 0 ? RecreaTheme.verdeSuave : RecreaTheme.amarilloSuave,
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         pending == 0 ? 'Completo' : 'Faltan $pending',
                         style: TextStyle(
-                          fontSize: 12,
+                          fontSize: 11,
                           fontWeight: FontWeight.w900,
-                          color: pending == 0
-                              ? Colors.green[800]
-                              : Colors.orange[900],
+                          color: pending == 0 ? Colors.green[800] : Colors.orange[900],
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(10),
                   child: LinearProgressIndicator(
                     value: progress,
-                    minHeight: 12,
+                    minHeight: 10,
                     backgroundColor: RecreaTheme.fondoBase,
-                    color: pending == 0
-                        ? RecreaTheme.verde
-                        : RecreaTheme.turquesa,
+                    color: pending == 0 ? RecreaTheme.verde : RecreaTheme.turquesa,
                   ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           Container(
-            padding: const EdgeInsets.all(5),
+            padding: const EdgeInsets.all(4),
             decoration: BoxDecoration(
               color: RecreaTheme.blanco,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(16),
               border: Border.all(color: RecreaTheme.bordeClaro),
             ),
             child: Row(
@@ -630,7 +544,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                 ),
                 Expanded(
                   child: _buildSegmentButton(
-                    label: 'Pendientes ($pending)',
+                    label: 'Faltan ($pending)',
                     isSelected: _parentFilter == 'pendientes',
                     activeColor: RecreaTheme.amarillo,
                     onTap: () => setState(() => _parentFilter = 'pendientes'),
@@ -638,7 +552,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                 ),
                 Expanded(
                   child: _buildSegmentButton(
-                    label: 'Entregados ($delivered)',
+                    label: 'Listos ($delivered)',
                     isSelected: _parentFilter == 'entregados',
                     activeColor: RecreaTheme.verde,
                     onTap: () => setState(() => _parentFilter = 'entregados'),
@@ -647,7 +561,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 14),
           ...filteredSupplies.map(
             (item) => _buildSupplyItemTile(Map.from(item), isReadOnly: true),
           ),
@@ -657,6 +571,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
   }
 
   Widget _buildStaffClassroomView() {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final int totalStudents = _classroomStudents.length;
     int studentsCompleted = 0;
     int totalSuppliesInRoom = 0;
@@ -674,8 +589,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     }
 
     final List filteredStudents = _classroomStudents.where((st) {
-      final String fullName = '${st['first_names']} ${st['last_names']}'
-          .toLowerCase();
+      final String fullName = '${st['first_names']} ${st['last_names']}'.toLowerCase();
       final String dni = (st['dni']?.toString() ?? '').toLowerCase();
 
       if (_searchQuery.isNotEmpty &&
@@ -686,281 +600,278 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
 
       final String stId = st['id'].toString();
       final List list = _suppliesByStudent[stId] ?? [];
-      final bool isComplete =
-          list.isNotEmpty && list.every((e) => e['is_delivered'] == true);
+      final bool isComplete = list.isNotEmpty && list.every((e) => e['is_delivered'] == true);
 
       if (_staffStudentFilter == 'completos') return isComplete;
       if (_staffStudentFilter == 'incompletos') return !isComplete;
       return true;
     }).toList();
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                _role == 'admin'
-                    ? 'Supervisión de Útiles por Aula'
-                    : 'Control de Útiles de mi Aula',
-                style: const TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.w900,
-                  color: RecreaTheme.oscuro,
-                ),
-              ),
-              Text(
-                _role == 'admin'
-                    ? 'Modo Administradora: Puedes marcar y desmarcar útiles de cualquier alumno.'
-                    : 'Modo Maestra: Selecciona los útiles recibidos y presiona Guardar abajo.',
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: RecreaTheme.textoMudo,
-                ),
-              ),
-              const SizedBox(height: 16),
-              if (_classrooms.isNotEmpty)
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: _classrooms.map((room) {
-                      final int roomId = room['id'] as int;
-                      final bool isSelected = roomId == _selectedClassroomId;
-                      return Padding(
-                        padding: const EdgeInsets.only(right: 10),
-                        child: InkWell(
-                          onTap: () async {
-                            if (isSelected) return;
-                            setState(() {
-                              _selectedClassroomId = roomId;
-                              _isLoading = true;
-                            });
-                            await _loadClassroomMatrix(roomId);
-                            if (mounted) setState(() => _isLoading = false);
-                          },
-                          borderRadius: BorderRadius.circular(16),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 10,
-                            ),
-                            decoration: BoxDecoration(
-                              color: isSelected
-                                  ? RecreaTheme.turquesa
-                                  : RecreaTheme.blanco,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: isSelected
-                                    ? RecreaTheme.turquesa
-                                    : RecreaTheme.bordeClaro,
+    final double hPad = isDesktop ? 24 : 16;
+
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(hPad, isDesktop ? 24 : 12, hPad, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (isDesktop) ...[
+                  const Text(
+                    'Útiles',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: RecreaTheme.oscuro),
+                  ),
+                  const SizedBox(height: 14),
+                ],
+                if (_classrooms.isNotEmpty) ...[
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: _classrooms.map((room) {
+                        final int roomId = room['id'] as int;
+                        final bool isSelected = roomId == _selectedClassroomId;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 8),
+                          child: InkWell(
+                            onTap: () async {
+                              if (isSelected) return;
+                              setState(() {
+                                _selectedClassroomId = roomId;
+                                _isLoading = true;
+                              });
+                              await _loadClassroomMatrix(roomId);
+                              if (mounted) setState(() => _isLoading = false);
+                            },
+                            borderRadius: BorderRadius.circular(14),
+                            child: AnimatedContainer(
+                              duration: const Duration(milliseconds: 200),
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: isSelected ? RecreaTheme.turquesa : RecreaTheme.blanco,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: isSelected ? RecreaTheme.turquesa : RecreaTheme.bordeClaro,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.meeting_room_rounded,
+                                    size: 16,
+                                    color: isSelected ? RecreaTheme.blanco : RecreaTheme.turquesa,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    room['name'].toString(),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 12.5,
+                                      color: isSelected ? RecreaTheme.blanco : RecreaTheme.oscuro,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.meeting_room_rounded,
-                                  size: 18,
-                                  color: isSelected
-                                      ? RecreaTheme.blanco
-                                      : RecreaTheme.turquesa,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  room['name'].toString(),
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 13,
-                                    color: isSelected
-                                        ? RecreaTheme.blanco
-                                        : RecreaTheme.oscuro,
-                                  ),
-                                ),
-                              ],
-                            ),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                        );
+                      }).toList(),
+                    ),
                   ),
-                ),
-            ],
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
-          child: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 14,
-                ),
-                decoration: BoxDecoration(
-                  color: RecreaTheme.blanco,
-                  borderRadius: BorderRadius.circular(22),
-                  border: Border.all(color: RecreaTheme.bordeClaro),
-                ),
-                child: Wrap(
-                  spacing: 24,
-                  runSpacing: 12,
-                  alignment: WrapAlignment.spaceAround,
+                  const SizedBox(height: 12),
+                ],
+                Row(
                   children: [
-                    _buildClassroomStat(
-                      'Alumnos en Aula',
-                      '$totalStudents',
-                      Icons.groups_rounded,
-                      RecreaTheme.turquesa,
+                    Expanded(
+                      child: _buildCompactKpi(
+                        'Alumnos',
+                        '$totalStudents',
+                        Icons.groups_rounded,
+                        RecreaTheme.turquesa,
+                      ),
                     ),
-                    _buildClassroomStat(
-                      'Listas Completas',
-                      '$studentsCompleted / $totalStudents',
-                      Icons.verified_rounded,
-                      RecreaTheme.verde,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCompactKpi(
+                        'Completos',
+                        '$studentsCompleted/$totalStudents',
+                        Icons.verified_rounded,
+                        RecreaTheme.verde,
+                      ),
                     ),
-                    _buildClassroomStat(
-                      'Total Útiles Recibidos',
-                      '$totalDeliveredInRoom / $totalSuppliesInRoom',
-                      Icons.backpack_rounded,
-                      RecreaTheme.rosa,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCompactKpi(
+                        'Recibidos',
+                        '$totalDeliveredInRoom/$totalSuppliesInRoom',
+                        Icons.backpack_rounded,
+                        RecreaTheme.rosa,
+                      ),
                     ),
                   ],
                 ),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: SizedBox(
-                      height: 46,
-                      child: TextField(
-                        onChanged: (val) => setState(() => _searchQuery = val),
-                        decoration: InputDecoration(
-                          hintText: 'Buscar alumno por nombre o DNI...',
-                          prefixIcon: const Icon(
-                            Icons.search_rounded,
-                            size: 20,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 0,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: const BorderSide(
-                              color: RecreaTheme.bordeClaro,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 5,
-                    child: Container(
-                      height: 46,
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: RecreaTheme.blanco,
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: RecreaTheme.bordeClaro),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _buildSegmentButton(
-                              label: 'Todos',
-                              isSelected: _staffStudentFilter == 'todos',
-                              activeColor: RecreaTheme.turquesa,
-                              onTap: () =>
-                                  setState(() => _staffStudentFilter = 'todos'),
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildSegmentButton(
-                              label: 'Faltan',
-                              isSelected: _staffStudentFilter == 'incompletos',
-                              activeColor: RecreaTheme.amarillo,
-                              onTap: () => setState(
-                                () => _staffStudentFilter = 'incompletos',
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: _buildSegmentButton(
-                              label: 'Completos',
-                              isSelected: _staffStudentFilter == 'completos',
-                              activeColor: RecreaTheme.verde,
-                              onTap: () => setState(
-                                () => _staffStudentFilter = 'completos',
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                const SizedBox(height: 12),
+                if (isDesktop)
+                  Row(
+                    children: [
+                      Expanded(flex: 5, child: _buildSearchField()),
+                      const SizedBox(width: 12),
+                      Expanded(flex: 5, child: _buildStaffFilterBar()),
+                    ],
+                  )
+                else ...[
+                  _buildSearchField(),
+                  const SizedBox(height: 8),
+                  _buildStaffFilterBar(),
                 ],
-              ),
-            ],
+              ],
+            ),
           ),
         ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: filteredStudents.isEmpty
-              ? const Center(
-                  child: Text(
-                    'No hay alumnos que coincidan con el filtro en esta aula.',
-                    style: TextStyle(
-                      color: RecreaTheme.textoMudo,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(24, 4, 24, 90),
-                  itemCount: filteredStudents.length,
-                  itemBuilder: (context, index) {
-                    final Map student = Map.from(filteredStudents[index]);
-                    final String stId = student['id'].toString();
-                    final List supplies = _suppliesByStudent[stId] ?? [];
-                    return _buildStudentSuppliesAccordion(student, supplies);
-                  },
-                ),
-        ),
+        if (filteredStudents.isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                'Sin alumnos en este filtro.',
+                style: TextStyle(color: RecreaTheme.textoMudo, fontWeight: FontWeight.bold),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(hPad, 0, hPad, 96),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final Map student = Map.from(filteredStudents[index]);
+                  final String stId = student['id'].toString();
+                  final List supplies = _suppliesByStudent[stId] ?? [];
+                  return _buildStudentSuppliesAccordion(student, supplies);
+                },
+                childCount: filteredStudents.length,
+              ),
+            ),
+          ),
       ],
     );
   }
 
+  Widget _buildSearchField() {
+    return SizedBox(
+      height: 44,
+      child: TextField(
+        onChanged: (val) => setState(() => _searchQuery = val),
+        decoration: InputDecoration(
+          hintText: 'Buscar alumno o DNI...',
+          prefixIcon: const Icon(Icons.search_rounded, size: 19),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: RecreaTheme.bordeClaro),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStaffFilterBar() {
+    return Container(
+      height: 42,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: RecreaTheme.blanco,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: RecreaTheme.bordeClaro),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _buildSegmentButton(
+              label: 'Todos',
+              isSelected: _staffStudentFilter == 'todos',
+              activeColor: RecreaTheme.turquesa,
+              onTap: () => setState(() => _staffStudentFilter = 'todos'),
+            ),
+          ),
+          Expanded(
+            child: _buildSegmentButton(
+              label: 'Faltan',
+              isSelected: _staffStudentFilter == 'incompletos',
+              activeColor: RecreaTheme.amarillo,
+              onTap: () => setState(() => _staffStudentFilter = 'incompletos'),
+            ),
+          ),
+          Expanded(
+            child: _buildSegmentButton(
+              label: 'Completos',
+              isSelected: _staffStudentFilter == 'completos',
+              activeColor: RecreaTheme.verde,
+              onTap: () => setState(() => _staffStudentFilter = 'completos'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactKpi(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: RecreaTheme.blanco,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: RecreaTheme.bordeClaro),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: 16),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  value,
+                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 14, color: RecreaTheme.oscuro),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: RecreaTheme.textoMudo),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStudentSuppliesAccordion(Map student, List supplies) {
-    final String fullName =
-        '${student['first_names']} ${student['last_names']}';
-    final String initial = fullName.isNotEmpty
-        ? fullName[0].toUpperCase()
-        : 'A';
+    final String stId = student['id'].toString();
+    final String fullName = '${student['first_names']} ${student['last_names']}';
+    final String initial = fullName.isNotEmpty ? fullName[0].toUpperCase() : 'A';
     final int total = supplies.length;
-    final int delivered = supplies
-        .where((s) => s['is_delivered'] == true)
-        .length;
+    final int delivered = supplies.where((s) => s['is_delivered'] == true).length;
     final bool isAllComplete = total > 0 && delivered == total;
     final double progress = total == 0 ? 0.0 : delivered / total;
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 14),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: RecreaTheme.blanco,
-        borderRadius: BorderRadius.circular(22),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(
           color: isAllComplete
               ? RecreaTheme.verde.withValues(alpha: 0.5)
               : RecreaTheme.bordeClaro,
-          width: 1.3,
+          width: 1.2,
         ),
       ),
       child: Theme(
@@ -971,38 +882,29 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
           highlightColor: Colors.transparent,
         ),
         child: ExpansionTile(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-          ),
-          collapsedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(22),
-          ),
-          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+          key: PageStorageKey<String>('supply_student_$stId'),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          collapsedShape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
           leading: CircleAvatar(
-            radius: 22,
-            backgroundColor: isAllComplete
-                ? RecreaTheme.verdeSuave
-                : RecreaTheme.turquesaSuave,
+            radius: 20,
+            backgroundColor: isAllComplete ? RecreaTheme.verdeSuave : RecreaTheme.turquesaSuave,
             child: Text(
               initial,
               style: TextStyle(
                 fontWeight: FontWeight.w900,
-                fontSize: 16,
+                fontSize: 15,
                 color: isAllComplete ? Colors.green[800] : RecreaTheme.turquesa,
               ),
             ),
           ),
           title: Text(
             fullName,
-            style: const TextStyle(
-              fontWeight: FontWeight.w900,
-              fontSize: 16,
-              color: RecreaTheme.oscuro,
-            ),
+            style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: RecreaTheme.oscuro),
           ),
           subtitle: Padding(
-            padding: const EdgeInsets.only(top: 6),
+            padding: const EdgeInsets.only(top: 5),
             child: Row(
               children: [
                 Expanded(
@@ -1010,38 +912,32 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                     borderRadius: BorderRadius.circular(8),
                     child: LinearProgressIndicator(
                       value: progress,
-                      minHeight: 8,
+                      minHeight: 7,
                       backgroundColor: RecreaTheme.fondoBase,
-                      color: isAllComplete
-                          ? RecreaTheme.verde
-                          : RecreaTheme.turquesa,
+                      color: isAllComplete ? RecreaTheme.verde : RecreaTheme.turquesa,
                     ),
                   ),
                 ),
-                const SizedBox(width: 12),
+                const SizedBox(width: 10),
                 Text(
-                  '$delivered / $total útiles',
+                  '$delivered/$total',
                   style: TextStyle(
-                    fontSize: 12,
+                    fontSize: 11.5,
                     fontWeight: FontWeight.w800,
-                    color: isAllComplete
-                        ? Colors.green[800]
-                        : RecreaTheme.textoMudo,
+                    color: isAllComplete ? Colors.green[800] : RecreaTheme.textoMudo,
                   ),
                 ),
               ],
             ),
           ),
           trailing: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
             decoration: BoxDecoration(
-              color: isAllComplete
-                  ? RecreaTheme.verdeSuave
-                  : RecreaTheme.amarilloSuave,
-              borderRadius: BorderRadius.circular(12),
+              color: isAllComplete ? RecreaTheme.verdeSuave : RecreaTheme.amarilloSuave,
+              borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
-              isAllComplete ? 'Completo' : 'Faltan ${total - delivered}',
+              isAllComplete ? 'Listo' : '-${total - delivered}',
               style: TextStyle(
                 fontSize: 11,
                 fontWeight: FontWeight.w900,
@@ -1050,7 +946,7 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
             ),
           ),
           children: [
-            const Divider(color: RecreaTheme.bordeClaro, height: 16),
+            const Divider(color: RecreaTheme.bordeClaro, height: 14),
             ...supplies.map(
               (item) => _buildSupplyItemTile(item as Map, isReadOnly: false),
             ),
@@ -1064,19 +960,15 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
     final String supplyId = item['id'].toString();
     final bool isDeliveredInDb = item['is_delivered'] == true;
     final bool isLocallyChecked = _newlyCheckedIds.contains(supplyId);
-
-    // Para la maestra, está checkeado si ya estaba en DB o si lo acaba de marcar localmente
     final bool isChecked = isDeliveredInDb || isLocallyChecked;
-
-    // Bloqueado si es maestra y ya estaba guardado en BD
     final bool isLockedForTeacher = _role == 'maestra' && isDeliveredInDb;
 
     final String? deliveredAt = item['delivered_at']?.toString();
     final String dateLabel = isDeliveredInDb && deliveredAt != null
-        ? 'Entregado el ${DateFormat('dd/MM/yyyy').format(DateTime.parse(deliveredAt).toLocal())}'
+        ? DateFormat('dd/MM/yyyy').format(DateTime.parse(deliveredAt).toLocal())
         : isLocallyChecked
-        ? 'Marcado (pendiente de guardar)'
-        : 'Pendiente de entrega';
+            ? 'Por guardar'
+            : 'Pendiente';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1084,53 +976,43 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
         color: isChecked ? RecreaTheme.verdeSuave : RecreaTheme.fondoBase,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
-          color: isChecked
-              ? RecreaTheme.verde.withValues(alpha: 0.5)
-              : RecreaTheme.bordeClaro,
+          color: isChecked ? RecreaTheme.verde.withValues(alpha: 0.5) : RecreaTheme.bordeClaro,
         ),
       ),
       child: InkWell(
         onTap: isReadOnly ? null : () => _handleToggleSupply(item),
         borderRadius: BorderRadius.circular(14),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           child: Row(
             children: [
               Container(
-                width: 24,
-                height: 24,
+                width: 22,
+                height: 22,
                 decoration: BoxDecoration(
                   color: isChecked ? RecreaTheme.verde : RecreaTheme.blanco,
-                  borderRadius: BorderRadius.circular(7),
+                  borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: isChecked
-                        ? RecreaTheme.verde
-                        : RecreaTheme.textoMudo,
-                    width: 1.8,
+                    color: isChecked ? RecreaTheme.verde : RecreaTheme.textoMudo,
+                    width: 1.6,
                   ),
                 ),
                 child: isChecked
-                    ? const Icon(
-                        Icons.check_rounded,
-                        size: 16,
-                        color: RecreaTheme.blanco,
-                      )
+                    ? const Icon(Icons.check_rounded, size: 15, color: RecreaTheme.blanco)
                     : null,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item['name']?.toString() ?? 'Útil escolar',
+                      item['name']?.toString() ?? 'Útil',
                       style: TextStyle(
                         fontWeight: FontWeight.w800,
                         fontSize: 13,
                         color: RecreaTheme.oscuro,
-                        decoration: isDeliveredInDb
-                            ? TextDecoration.lineThrough
-                            : null,
+                        decoration: isDeliveredInDb ? TextDecoration.lineThrough : null,
                       ),
                     ),
                     Text(
@@ -1138,93 +1020,23 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
-                        color: isChecked
-                            ? Colors.green[800]
-                            : RecreaTheme.textoMudo,
+                        color: isChecked ? Colors.green[800] : RecreaTheme.textoMudo,
                       ),
                     ),
                   ],
                 ),
               ),
               if (isLockedForTeacher)
-                const Tooltip(
-                  message: 'Este útil ya fue guardado y no se puede desmarcar',
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.lock_rounded,
-                        size: 15,
-                        color: RecreaTheme.textoMudo,
-                      ),
-                      SizedBox(width: 4),
-                      Text(
-                        'Guardado',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.bold,
-                          color: RecreaTheme.textoMudo,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
+                const Icon(Icons.lock_rounded, size: 16, color: RecreaTheme.textoMudo)
               else if (_role == 'admin' && isDeliveredInDb)
                 const Text(
-                  'Toca para desmarcar',
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                    color: RecreaTheme.rosa,
-                  ),
+                  'Desmarcar',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: RecreaTheme.rosa),
                 ),
             ],
           ),
         ),
       ),
-    );
-  }
-
-  Widget _buildClassroomStat(
-    String label,
-    String value,
-    IconData icon,
-    Color color,
-  ) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(icon, color: color, size: 20),
-        ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: RecreaTheme.oscuro,
-              ),
-            ),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                color: RecreaTheme.textoMudo,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 
@@ -1236,14 +1048,14 @@ class _SuppliesParentViewState extends State<SuppliesParentView> {
   }) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         alignment: Alignment.center,
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         decoration: BoxDecoration(
           color: isSelected ? activeColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
         ),
         child: Text(
           label,

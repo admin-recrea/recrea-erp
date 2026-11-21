@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:recrea_app/features/attendance/attendance_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:recrea_app/features/payments/payment_parent_view.dart';
@@ -44,6 +45,7 @@ final routerProvider = Provider((ref) {
           StatefulShellBranch(routes: [GoRoute(path: '/enrollment', builder: (context, state) => const EnrollmentScreen())]),
           StatefulShellBranch(routes: [GoRoute(path: '/enrollment_parent', builder: (context, state) => const EnrollmentParentView())]),
           StatefulShellBranch(routes: [GoRoute(path: '/supplies', builder: (context, state) => const SuppliesParentView())]),
+          StatefulShellBranch(routes: [GoRoute(path: '/attendance', builder: (context, state) => const AttendanceScreen())]),
         ],
       ),
     ],

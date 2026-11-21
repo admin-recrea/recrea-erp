@@ -41,30 +41,33 @@ class _ResponsiveLayoutShellState extends ConsumerState<ResponsiveLayoutShell> {
     switch (rawRole) {
       case 'padre':
         return [
-          {'icon': Icons.dashboard_rounded, 'label': 'Tablero', 'route': '/home'},
+          {'icon': Icons.dashboard_rounded, 'label': 'Inicio', 'route': '/home'},
           {'icon': Icons.menu_book_rounded, 'label': 'Agenda', 'route': '/agenda'},
           {'icon': Icons.calendar_month_rounded, 'label': 'Calendario', 'route': '/calendar'},
           {'icon': Icons.person_rounded, 'label': 'Perfil', 'route': '/profile'},
-          {'icon': Icons.payments_rounded, 'label': 'Pagar', 'route': '/payments_parent'},
+          {'icon': Icons.payments_rounded, 'label': 'Pagos', 'route': '/payments_parent'},
           {'icon': Icons.how_to_reg_rounded, 'label': 'Matrícula', 'route': '/enrollment_parent'},
-          {'icon': Icons.backpack_rounded, 'label': 'Lista de Útiles', 'route': '/supplies'},
+          {'icon': Icons.backpack_rounded, 'label': 'Útiles', 'route': '/supplies'},
+          {'icon': Icons.fact_check_rounded, 'label': 'Asistencia', 'route': '/attendance'},
         ];
       case 'maestra':
         return [
-          {'icon': Icons.school_rounded, 'label': 'Tablero', 'route': '/home'},
+          {'icon': Icons.school_rounded, 'label': 'Inicio', 'route': '/home'},
           {'icon': Icons.menu_book_rounded, 'label': 'Agenda', 'route': '/agenda'},
           {'icon': Icons.calendar_month_rounded, 'label': 'Calendario', 'route': '/calendar'},
-          {'icon': Icons.backpack_rounded, 'label': 'Lista de Útiles', 'route': '/supplies'},
+          {'icon': Icons.backpack_rounded, 'label': 'Útiles', 'route': '/supplies'},
           {'icon': Icons.person_rounded, 'label': 'Perfil', 'route': '/profile'},
+          {'icon': Icons.fact_check_rounded, 'label': 'Asistencia', 'route': '/attendance'},
         ];
       case 'admin':
         return [
-          {'icon': Icons.dashboard_rounded, 'label': 'Tablero', 'route': '/home'},
+          {'icon': Icons.dashboard_rounded, 'label': 'Inicio', 'route': '/home'},
           {'icon': Icons.receipt_long_rounded, 'label': 'Tesorería', 'route': '/payments'},
           {'icon': Icons.how_to_reg_rounded, 'label': 'Matrícula', 'route': '/enrollment'},
           {'icon': Icons.menu_book_rounded, 'label': 'Agenda', 'route': '/agenda'},
           {'icon': Icons.calendar_month_rounded, 'label': 'Calendario', 'route': '/calendar'},
-          {'icon': Icons.backpack_rounded, 'label': 'Lista de Útiles', 'route': '/supplies'},
+          {'icon': Icons.backpack_rounded, 'label': 'Útiles', 'route': '/supplies'},
+          {'icon': Icons.fact_check_rounded, 'label': 'Asistencia', 'route': '/attendance'},
         ];
       default:
         return [];
@@ -73,16 +76,17 @@ class _ResponsiveLayoutShellState extends ConsumerState<ResponsiveLayoutShell> {
 
   String _getAppBarTitle(BuildContext context) {
     final String location = GoRouterState.of(context).uri.toString();
-    if (location.startsWith('/home')) return 'Tablero';
-    if (location.startsWith('/agenda')) return 'Agenda Digital';
+    if (location.startsWith('/home')) return 'Inicio';
+    if (location.startsWith('/agenda')) return 'Agenda';
     if (location.startsWith('/calendar')) return 'Calendario';
-    if (location.startsWith('/profile')) return 'Mi Cuenta';
-    if (location.startsWith('/payments')) return 'Pagos y Vouchers';
+    if (location.startsWith('/profile')) return 'Perfil';
+    if (location.startsWith('/payments_parent')) return 'Pagos';
+    if (location.startsWith('/payments')) return 'Tesorería';
     if (location.startsWith('/enrollment')) return 'Matrícula';
-    if (location.startsWith('/supplies')) return 'Lista de Útiles';
-    return 'Tablero';
+    if (location.startsWith('/supplies')) return 'Útiles';
+    if (location.startsWith('/attendance')) return 'Asistencia';
+    return 'Inicio';
   }
-
   int _calculateSelectedIndex(BuildContext context, List items) {
     if (items.isEmpty) return 0;
     final String location = GoRouterState.of(context).uri.toString();

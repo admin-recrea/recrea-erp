@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:recrea_app/core/widgets/auto_collapse_fab.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_theme.dart';
 
@@ -21,6 +23,8 @@ class _AgendaScreenState extends State<AgendaScreen> {
   // ANTES: static final Set<String> _signedIdsCache = {'demo-3'};
   // AHORA:
   static final Set<String> _signedIdsCache = {};
+  Map<String, Set<String>> _signaturesByEntry = {}; // entry_id -> Set<parent_id>
+  List<Map<String, dynamic>> _allParents = []; // Lista de padres con su hijo y teléfono
   static List<Map<String, dynamic>>? _cachedDemoItems;
 
   List<Map<String, dynamic>> _items = [];
@@ -31,6 +35,192 @@ class _AgendaScreenState extends State<AgendaScreen> {
     super.initState();
     _loadAgendaData();
   }
+  Future<void> _sendReminderToParent(Map<String, dynamic> entry, Map<String, dynamic> parent, {bool openWhatsApp = false}) async {
+    try {
+      await _supabase.from('agenda_reminders').insert({
+        'entry_id': entry['id'],
+        'parent_id': parent['id'],
+      });
+      // Re-destaca el comunicado en el carrusel si estaba oculto
+      await _supabase
+          .from('agenda_entries')
+          .update({'show_in_carousel': true})
+          .eq('id', entry['id']);
+
+      if (openWhatsApp && (parent['phone']?.toString().isNotEmpty ?? false)) {
+        final cleanPhone = parent['phone'].toString().replaceAll(RegExp(r'[^0-9]'), '');
+        final fullPhone = cleanPhone.startsWith('51') ? cleanPhone : '51$cleanPhone';
+        final msg = Uri.encodeComponent(
+          'Hola ${parent['full_name']}, le recordamos firmar el comunicado "${entry['title']}" en la app RECREA.',
+        );
+        final uri = Uri.parse('https://wa.me/$fullPhone?text=$msg');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Recordatorio enviado a ${parent['full_name']}'),
+            backgroundColor: RecreaTheme.turquesa,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al notificar: $e'), backgroundColor: RecreaTheme.rosa),
+        );
+      }
+    }
+  }
+
+  void _showSignaturesModal(Map<String, dynamic> entry) {
+    final String entryId = entry['id'].toString();
+    final Set<String> signedIds = _signaturesByEntry[entryId] ?? {};
+
+    final signedParents = _allParents.where((p) => signedIds.contains(p['id'])).toList();
+    final pendingParents = _allParents.where((p) => !signedIds.contains(p['id'])).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: RecreaTheme.blanco,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+      ),
+      builder: (ctx) => DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: 0.72,
+        maxChildSize: 0.92,
+        builder: (ctx, scrollCtrl) => DefaultTabController(
+          length: 2,
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(color: RecreaTheme.bordeClaro, borderRadius: BorderRadius.circular(4)),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        entry['title']?.toString() ?? 'Comunicado',
+                        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: RecreaTheme.oscuro),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (pendingParents.isNotEmpty)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          backgroundColor: RecreaTheme.rosaSuave,
+                          foregroundColor: RecreaTheme.rosa,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        icon: const Icon(Icons.notifications_active_rounded, size: 16),
+                        label: const Text('Notificar a todos', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                        onPressed: () async {
+                          for (var p in pendingParents) {
+                            await _sendReminderToParent(entry, p);
+                          }
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                      ),
+                  ],
+                ),
+              ),
+              TabBar(
+                indicatorColor: RecreaTheme.turquesa,
+                labelColor: RecreaTheme.turquesa,
+                unselectedLabelColor: RecreaTheme.textoMudo,
+                labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                tabs: [
+                  Tab(text: 'Pendientes (${pendingParents.length})'),
+                  Tab(text: 'Firmaron (${signedParents.length})'),
+                ],
+              ),
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    // TAB 1: PENDIENTES DE FIRMA
+                    pendingParents.isEmpty
+                        ? const Center(child: Text('Todos los padres han firmado.', style: TextStyle(color: RecreaTheme.textoMudo)))
+                        : ListView.builder(
+                            controller: scrollCtrl,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: pendingParents.length,
+                            itemBuilder: (_, i) {
+                              final p = pendingParents[i];
+                              final hasPhone = (p['phone']?.toString().isNotEmpty ?? false);
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 10),
+                                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: RecreaTheme.fondoBase,
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.pending_actions_rounded, color: RecreaTheme.amarillo, size: 20),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(p['full_name'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5, color: RecreaTheme.oscuro)),
+                                          if ((p['child_name'] as String).isNotEmpty)
+                                            Text('Alumno: ${p['child_name']}', style: const TextStyle(fontSize: 11.5, color: RecreaTheme.textoMudo)),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => _sendReminderToParent(entry, p, openWhatsApp: hasPhone),
+                                      style: TextButton.styleFrom(
+                                        backgroundColor: RecreaTheme.turquesaSuave,
+                                        foregroundColor: RecreaTheme.turquesa,
+                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                      ),
+                                      child: const Text('Notificar', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                    // TAB 2: YA FIRMARON
+                    signedParents.isEmpty
+                        ? const Center(child: Text('Aún nadie ha firmado.', style: TextStyle(color: RecreaTheme.textoMudo)))
+                        : ListView.builder(
+                            controller: scrollCtrl,
+                            padding: const EdgeInsets.all(16),
+                            itemCount: signedParents.length,
+                            itemBuilder: (_, i) {
+                              final p = signedParents[i];
+                              return ListTile(
+                                leading: const Icon(Icons.check_circle_rounded, color: RecreaTheme.verde),
+                                title: Text(p['full_name'], style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+                                subtitle: (p['child_name'] as String).isNotEmpty
+                                    ? Text('Alumno: ${p['child_name']}', style: const TextStyle(fontSize: 11.5))
+                                    : null,
+                              );
+                            },
+                          ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _loadAgendaData() async {
     if (_items.isEmpty) setState(() => _isLoading = true);
@@ -38,7 +228,6 @@ class _AgendaScreenState extends State<AgendaScreen> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      // Agregamos una 4ta consulta para saber el ID del hijo del padre logueado
       final results = await Future.wait<dynamic>([
         _supabase
             .from('profiles')
@@ -72,36 +261,77 @@ class _AgendaScreenState extends State<AgendaScreen> {
       if (_role == 'padre') {
         myChildId = relRes?['student_id']?.toString();
       } else {
-        _students =
-            stList; // Llenamos la lista de alumnos solo para Admin/Maestras
+        _students = stList;
+      }
+
+      // 1. AQUÍ VAN LOS TRY (justo después de obtener _role)
+      try {
+        final sigRes = await _supabase
+            .from('agenda_signatures')
+            .select('entry_id, parent_id');
+        final Map<String, Set<String>> sigMap = {};
+        for (var row in sigRes) {
+          final eId = row['entry_id'].toString();
+          sigMap.putIfAbsent(eId, () => {});
+          sigMap[eId]!.add(row['parent_id'].toString());
+        }
+        _signaturesByEntry = sigMap;
+      } catch (_) {}
+
+      if (_role != 'padre') {
+        try {
+          final pRes = await _supabase
+              .from('student_parents')
+              .select('parent_id, profiles(id, full_name, phone), students(first_names, last_names)');
+          final Map<String, Map<String, dynamic>> uniqueParents = {};
+          for (var row in pRes) {
+            final p = row['profiles'];
+            final st = row['students'];
+            if (p != null) {
+              final pid = p['id'].toString();
+              final childName = st != null
+                  ? '${st['first_names']} ${st['last_names']}'
+                  : '';
+              uniqueParents[pid] = {
+                'id': pid,
+                'full_name': p['full_name']?.toString() ?? 'Apoderado',
+                'phone': p['phone']?.toString() ?? '',
+                'child_name': childName,
+              };
+            }
+          }
+          _allParents = uniqueParents.values.toList();
+        } catch (_) {}
       }
 
       if (mounted) {
         setState(() {
           if (dbList.isNotEmpty) {
-            // AQUÍ ESTÁ LA SOLUCIÓN:
-            // 1. Ocultamos los avisos de retraso para que NO salgan en la Agenda de nadie.
-            // 2. Protegemos la privacidad para que los padres solo vean sus propias anotaciones.
             final filteredList = dbList.where((e) {
               final type = e['type']?.toString();
               final entryStudentId = e['student_id']?.toString();
 
-              // Ocultar siempre los avisos de retraso de la vista de Agenda
               if (type == 'retraso') return false;
 
-              // Filtro de privacidad estricto para el padre
               if (_role == 'padre') {
                 if (type == 'anotacion' && entryStudentId != myChildId) {
-                  return false; // No mostrar anotaciones de conducta/logros de otros niños
+                  return false;
                 }
               }
 
               return true;
             }).toList();
 
+            // 2. AQUÍ ES DONDE SE MAPEA _items
             _items = filteredList.map((e) {
               final item = Map<String, dynamic>.from(e);
               final id = item['id'].toString();
+
+              if (_role == 'padre' && item['type'] == 'comunicado') {
+                item['is_signed'] =
+                    _signaturesByEntry[id]?.contains(user.id) ?? false;
+              }
+
               if (_signedIdsCache.contains(id)) {
                 item['is_signed'] = true;
               }
@@ -125,6 +355,20 @@ class _AgendaScreenState extends State<AgendaScreen> {
 
     final String itemId = item['id'].toString();
     final String nowIso = DateTime.now().toIso8601String();
+    final user = _supabase.auth.currentUser;
+      if (item['type'] == 'comunicado' && user != null) {
+        await _supabase.from('agenda_signatures').upsert({
+          'entry_id': itemId,
+          'parent_id': user.id,
+          'signed_at': nowIso,
+        });
+        _signaturesByEntry.putIfAbsent(itemId, () => {}).add(user.id);
+      } else {
+        await _supabase
+            .from('agenda_entries')
+            .update({'is_signed': true, 'signed_at': nowIso})
+            .eq('id', itemId);
+      }
 
     setState(() {
       _items[index]['is_signed'] = true;
@@ -382,21 +626,15 @@ class _AgendaScreenState extends State<AgendaScreen> {
         : _items.where((e) => e['type'] == _filterType).toList();
 
     return Scaffold(
-      backgroundColor: RecreaTheme.fondoBase,
-      floatingActionButton: _role != 'padre'
-          ? FloatingActionButton.extended(
-              heroTag: null,
-              backgroundColor: RecreaTheme.rosa,
-              foregroundColor: RecreaTheme.blanco,
-              icon: const Icon(Icons.edit_note_rounded),
-              label: const Text(
-                'Nueva Nota',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+          backgroundColor: RecreaTheme.fondoBase,
+          floatingActionButton: _role != 'padre'
+          ? AutoCollapseFab(
+              label: 'Nueva Nota',
+              expandedIcon: Icons.edit_note_rounded,
               onPressed: _showCreateEntryDialog,
             )
           : null,
-      body: _isLoading
+          body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: RecreaTheme.turquesa),
             )
@@ -760,6 +998,32 @@ class _AgendaScreenState extends State<AgendaScreen> {
                   ),
                 ],
               ),
+              if (_role != 'padre' && !isAnotacion)
+                InkWell(
+                  onTap: () => _showSignaturesModal(item),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: RecreaTheme.turquesaSuave,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: RecreaTheme.turquesa, width: 1.2),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.fact_check_rounded, size: 16, color: RecreaTheme.turquesa),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Firmas (${(_signaturesByEntry[item['id'].toString()] ?? {}).length}/${_allParents.length})',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: RecreaTheme.turquesa),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                // ... mantiene tu InkWell actual de "Firmado (Visto)" / "Firmar de enterado"
               InkWell(
                 onTap: isSigned ? null : () => _signEntry(index),
                 borderRadius: BorderRadius.circular(14),

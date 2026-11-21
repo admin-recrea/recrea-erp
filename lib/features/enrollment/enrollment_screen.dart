@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_theme.dart';
 import '../../core/utils/carnet_pdf_service.dart';
+import '../../core/widgets/auto_collapse_fab.dart';
 
 class EnrollmentScreen extends StatefulWidget {
   const EnrollmentScreen({super.key});
@@ -26,7 +27,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
   List _teachers = [];
   List _students = [];
 
-  // Set para guardar los IDs de los alumnos seleccionados para imprimir en hoja A4
   final Set<String> _selectedStudentIdsForPrint = {};
 
   @override
@@ -34,6 +34,12 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
     _loadInitialData();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   void _printSelectedCarnets() {
@@ -44,7 +50,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     if (selectedStudents.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Selecciona al menos un alumno marcando su casilla para imprimir.'),
+          content: Text('Selecciona al menos un alumno para imprimir.'),
           backgroundColor: RecreaTheme.amarillo,
         ),
       );
@@ -83,14 +89,6 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Asigna o cambia la maestra encargada de esta aula.',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: RecreaTheme.textoMudo,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     value: selectedTeacherId,
                     decoration: InputDecoration(
@@ -209,7 +207,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             .select('role')
             .eq('id', user.id)
             .maybeSingle();
-        
+
         if (mounted) {
           _role = (profile?['role']?.toString() ?? 'padre').trim().toLowerCase();
         }
@@ -298,7 +296,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
       if (await canLaunchUrl(uri)) {
         await launchUrl(
           uri,
-          mode: LaunchMode.externalApplication, 
+          mode: LaunchMode.externalApplication,
         );
       } else {
         if (mounted) {
@@ -486,7 +484,7 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         'payment_method': 'Efectivo / Transferencia',
         'operation_number': 'ADMIN-REG',
         'voucher_url': voucherUrl,
-        'status': 'PAGADO', 
+        'status': 'PAGADO',
       });
 
       if (mounted) {
@@ -646,10 +644,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
             ),
           ),
           content: Container(
-            width: double.maxFinite, 
-            constraints: const BoxConstraints(
-              maxWidth: 450,
-            ), 
+            width: double.maxFinite,
+            constraints: const BoxConstraints(maxWidth: 450),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -770,74 +766,84 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
+
     return Scaffold(
       backgroundColor: RecreaTheme.fondoBase,
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: RecreaTheme.turquesa),
             )
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Matrícula y Aulas',
-                        style: TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.w900,
-                          color: RecreaTheme.oscuro,
+          : NestedScrollView(
+              floatHeaderSlivers: true,
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                SliverAppBar(
+                  primary: false,
+                  automaticallyImplyLeading: false,
+                  floating: true,
+                  snap: true,
+                  pinned: false,
+                  elevation: 0,
+                  backgroundColor: RecreaTheme.fondoBase,
+                  toolbarHeight: isDesktop ? 64 : 0,
+                  title: isDesktop
+                      ? const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Text(
+                            'Matrícula',
+                            style: TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                              color: RecreaTheme.oscuro,
+                            ),
+                          ),
+                        )
+                      : null,
+                  bottom: TabBar(
+                    controller: _tabController,
+                    indicatorColor: RecreaTheme.turquesa,
+                    indicatorWeight: 3,
+                    labelColor: RecreaTheme.turquesa,
+                    unselectedLabelColor: RecreaTheme.textoMudo,
+                    labelStyle: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                    ),
+                    tabs: const [
+                      Tab(
+                        height: 44,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.child_care_rounded, size: 18),
+                            SizedBox(width: 6),
+                            Text('Alumnos'),
+                          ],
                         ),
                       ),
-                      Text(
-                        'Gestiona la base de datos de los niños e imprime sus carnets QR',
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: RecreaTheme.textoMudo.withValues(alpha: 0.8),
+                      Tab(
+                        height: 44,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.meeting_room_rounded, size: 18),
+                            SizedBox(width: 6),
+                            Text('Aulas'),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: RecreaTheme.turquesa,
-                  indicatorWeight: 3,
-                  labelColor: RecreaTheme.turquesa,
-                  unselectedLabelColor: RecreaTheme.textoMudo,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  tabs: const [
-                    Tab(
-                      icon: Icon(Icons.child_care_rounded),
-                      text: 'Alumnos Matriculados',
-                    ),
-                    Tab(
-                      icon: Icon(Icons.meeting_room_rounded),
-                      text: 'Aulas y Terapias',
-                    ),
-                  ],
-                ),
-                Expanded(
-                  child: TabBarView(
-                    controller: _tabController,
-                    children: [_buildStudentsGrid(), _buildClassroomsGrid()],
-                  ),
-                ),
               ],
-            ),
-      floatingActionButton: _role == 'admin' 
-          ? FloatingActionButton.extended(
-              backgroundColor: RecreaTheme.rosa,
-              foregroundColor: RecreaTheme.blanco,
-              elevation: 4,
-              icon: const Icon(Icons.add_rounded),
-              label: const Text(
-                'Nuevo Registro',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              body: TabBarView(
+                controller: _tabController,
+                children: [_buildStudentsGrid(), _buildClassroomsGrid()],
               ),
+            ),
+      floatingActionButton: _role == 'admin'
+          ? AutoCollapseFab(
+              label: 'Nuevo Registro',
               onPressed: () {
                 if (_tabController.index == 0) {
                   _showCreateStudentDialog();
@@ -878,8 +884,8 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
 
     List filteredStudents = _showOnlyMissingDocs
         ? _students
-              .where((s) => (s['docs_verified'] as bool? ?? false) == false)
-              .toList()
+            .where((s) => (s['docs_verified'] as bool? ?? false) == false)
+            .toList()
         : List.from(_students);
 
     filteredStudents.sort((a, b) {
@@ -889,486 +895,528 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
     });
 
     final bool allFilteredSelected = filteredStudents.isNotEmpty &&
-        filteredStudents.every((s) => _selectedStudentIdsForPrint.contains(s['id'].toString()));
+        filteredStudents.every(
+          (s) => _selectedStudentIdsForPrint.contains(s['id'].toString()),
+        );
 
-    return Column(
-      children: [
-        // BARRA SUPERIOR CON CONTROLES DE SELECCIÓN E IMPRESIÓN A4
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-          child: Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Mostrados: ${filteredStudents.length}',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      color: RecreaTheme.textoMudo,
-                      fontSize: 13,
+    return CustomScrollView(
+      slivers: [
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${filteredStudents.length} alumnos',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: RecreaTheme.textoMudo,
+                        fontSize: 13,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  TextButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        if (allFilteredSelected) {
-                          _selectedStudentIdsForPrint.clear();
-                        } else {
-                          for (var s in filteredStudents) {
-                            _selectedStudentIdsForPrint.add(s['id'].toString());
+                    const SizedBox(width: 8),
+                    TextButton.icon(
+                      onPressed: () {
+                        setState(() {
+                          if (allFilteredSelected) {
+                            _selectedStudentIdsForPrint.clear();
+                          } else {
+                            for (var s in filteredStudents) {
+                              _selectedStudentIdsForPrint.add(
+                                s['id'].toString(),
+                              );
+                            }
                           }
-                        }
-                      });
-                    },
-                    icon: Icon(
-                      allFilteredSelected ? Icons.deselect_rounded : Icons.select_all_rounded,
-                      size: 18,
-                      color: RecreaTheme.turquesa,
-                    ),
-                    label: Text(
-                      allFilteredSelected ? 'Desmarcar todos' : 'Seleccionar todos',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: RecreaTheme.turquesa),
-                    ),
-                  ),
-                ],
-              ),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (_selectedStudentIdsForPrint.isNotEmpty) ...[
-                    ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: RecreaTheme.turquesa,
-                        foregroundColor: RecreaTheme.blanco,
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        });
+                      },
+                      icon: Icon(
+                        allFilteredSelected
+                            ? Icons.deselect_rounded
+                            : Icons.select_all_rounded,
+                        size: 18,
+                        color: RecreaTheme.turquesa,
                       ),
-                      icon: const Icon(Icons.print_rounded, size: 18),
                       label: Text(
-                        'Imprimir Carnets A4 (${_selectedStudentIdsForPrint.length})',
-                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                        allFilteredSelected ? 'Ninguno' : 'Todos',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 12,
+                          color: RecreaTheme.turquesa,
+                        ),
                       ),
-                      onPressed: _printSelectedCarnets,
                     ),
-                    const SizedBox(width: 10),
                   ],
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: _showOnlyMissingDocs
-                          ? RecreaTheme.amarilloSuave
-                          : RecreaTheme.fondoBase,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
+                ),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_selectedStudentIdsForPrint.isNotEmpty) ...[
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: RecreaTheme.turquesa,
+                          foregroundColor: RecreaTheme.blanco,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        icon: const Icon(Icons.print_rounded, size: 16),
+                        label: Text(
+                          'Carnets (${_selectedStudentIdsForPrint.length})',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        onPressed: _printSelectedCarnets,
+                      ),
+                      const SizedBox(width: 8),
+                    ],
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
                         color: _showOnlyMissingDocs
-                            ? RecreaTheme.amarillo.withValues(alpha: 0.3)
-                            : RecreaTheme.bordeClaro,
+                            ? RecreaTheme.amarilloSuave
+                            : RecreaTheme.blanco,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(
+                          color: _showOnlyMissingDocs
+                              ? RecreaTheme.amarillo.withValues(alpha: 0.3)
+                              : RecreaTheme.bordeClaro,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Faltan Docs',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: _showOnlyMissingDocs
+                                  ? RecreaTheme.amarillo
+                                  : RecreaTheme.textoMudo,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          SizedBox(
+                            height: 30,
+                            child: Switch(
+                              value: _showOnlyMissingDocs,
+                              activeColor: RecreaTheme.amarillo,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                              onChanged: (value) {
+                                setState(() {
+                                  _showOnlyMissingDocs = value;
+                                });
+                              },
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Faltan Docs',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                            color: _showOnlyMissingDocs
-                                ? RecreaTheme.amarillo
-                                : RecreaTheme.textoMudo,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        SizedBox(
-                          height: 32,
-                          child: Switch(
-                            value: _showOnlyMissingDocs,
-                            activeColor: RecreaTheme.amarillo,
-                            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            onChanged: (value) {
-                              setState(() {
-                                _showOnlyMissingDocs = value;
-                              });
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
+        if (filteredStudents.isEmpty)
+          const SliverFillRemaining(
+            hasScrollBody: false,
+            child: Center(
+              child: Text(
+                'Todos los documentos verificados.',
+                style: TextStyle(color: RecreaTheme.textoMudo),
+              ),
+            ),
+          )
+        else
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+            sliver: SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  final room = _classrooms[index];
+                  final int roomId = room['id'] as int;
+                  final bool isRegular = room['type'] == 'regular';
 
-        Expanded(
-          child: filteredStudents.isEmpty
-              ? const Center(
-                  child: Text(
-                    'Todos los alumnos tienen sus documentos verificados.',
-                    style: TextStyle(color: RecreaTheme.textoMudo),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 8,
-                  ),
-                  itemCount: _classrooms.length,
-                  itemBuilder: (context, index) {
-                    final room = _classrooms[index];
-                    final int roomId = room['id'] as int;
-                    final bool isRegular = room['type'] == 'regular';
+                  final roomStudents = filteredStudents
+                      .where((s) => s['classroom_id'] == roomId)
+                      .toList();
 
-                    final roomStudents = filteredStudents
-                        .where((s) => s['classroom_id'] == roomId)
-                        .toList();
+                  if (roomStudents.isEmpty && _showOnlyMissingDocs) {
+                    return const SizedBox.shrink();
+                  }
 
-                    if (roomStudents.isEmpty && _showOnlyMissingDocs) {
-                      return const SizedBox.shrink();
-                    }
-
-                    final bool allRoomSelected = roomStudents.isNotEmpty &&
-                        roomStudents.every((s) => _selectedStudentIdsForPrint.contains(s['id'].toString()));
-
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: RecreaTheme.blanco,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(
-                          color: RecreaTheme.bordeClaro,
-                          width: 1.2,
+                  final bool allRoomSelected = roomStudents.isNotEmpty &&
+                      roomStudents.every(
+                        (s) => _selectedStudentIdsForPrint.contains(
+                          s['id'].toString(),
                         ),
+                      );
+
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: RecreaTheme.blanco,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: RecreaTheme.bordeClaro,
+                        width: 1.2,
                       ),
-                      child: Theme(
-                        data: Theme.of(context).copyWith(
-                          dividerColor: Colors.transparent,
-                          hoverColor: Colors.transparent,
-                          splashColor: Colors.transparent,
-                          highlightColor: Colors.transparent,
+                    ),
+                    child: Theme(
+                      data: Theme.of(context).copyWith(
+                        dividerColor: Colors.transparent,
+                        hoverColor: Colors.transparent,
+                        splashColor: Colors.transparent,
+                        highlightColor: Colors.transparent,
+                      ),
+                      child: ExpansionTile(
+                        key: PageStorageKey<String>('aula_$roomId'),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
                         ),
-                        child: ExpansionTile(
-                          key: PageStorageKey<String>('aula_$roomId'),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                        collapsedShape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        initiallyExpanded: false,
+                        tilePadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 6,
+                        ),
+                        leading: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: isRegular
+                                ? RecreaTheme.turquesaSuave
+                                : RecreaTheme.amarilloSuave,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          collapsedShape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(20),
+                          child: Icon(
+                            isRegular
+                                ? Icons.school_rounded
+                                : Icons.extension_rounded,
+                            color: isRegular
+                                ? RecreaTheme.turquesa
+                                : RecreaTheme.amarillo,
+                            size: 22,
                           ),
-                          initiallyExpanded: false,
-                          tilePadding: const EdgeInsets.symmetric(
-                            horizontal: 20,
-                            vertical: 6,
-                          ),
-                          leading: Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: isRegular
-                                  ? RecreaTheme.turquesaSuave
-                                  : RecreaTheme.amarilloSuave,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Icon(
-                              isRegular
-                                  ? Icons.school_rounded
-                                  : Icons.extension_rounded,
-                              color: isRegular
-                                  ? RecreaTheme.turquesa
-                                  : RecreaTheme.amarillo,
-                              size: 22,
-                            ),
-                          ),
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  room['name'].toString(),
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 16,
-                                    color: RecreaTheme.oscuro,
-                                  ),
+                        ),
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                room['name'].toString(),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 16,
+                                  color: RecreaTheme.oscuro,
                                 ),
                               ),
-                              if (roomStudents.isNotEmpty)
-                                IconButton(
-                                  tooltip: allRoomSelected
-                                      ? 'Desmarcar aula'
-                                      : 'Seleccionar aula para imprimir carnets',
-                                  icon: Icon(
-                                    allRoomSelected
-                                        ? Icons.check_box_rounded
-                                        : Icons.check_box_outline_blank_rounded,
-                                    color: allRoomSelected ? RecreaTheme.turquesa : RecreaTheme.textoMudo,
-                                    size: 20,
-                                  ),
-                                  onPressed: () {
-                                    setState(() {
-                                      if (allRoomSelected) {
-                                        for (var s in roomStudents) {
-                                          _selectedStudentIdsForPrint.remove(s['id'].toString());
-                                        }
-                                      } else {
-                                        for (var s in roomStudents) {
-                                          _selectedStudentIdsForPrint.add(s['id'].toString());
-                                        }
+                            ),
+                            if (roomStudents.isNotEmpty)
+                              IconButton(
+                                tooltip: allRoomSelected
+                                    ? 'Desmarcar aula'
+                                    : 'Seleccionar aula para carnets',
+                                icon: Icon(
+                                  allRoomSelected
+                                      ? Icons.check_box_rounded
+                                      : Icons.check_box_outline_blank_rounded,
+                                  color: allRoomSelected
+                                      ? RecreaTheme.turquesa
+                                      : RecreaTheme.textoMudo,
+                                  size: 20,
+                                ),
+                                onPressed: () {
+                                  setState(() {
+                                    if (allRoomSelected) {
+                                      for (var s in roomStudents) {
+                                        _selectedStudentIdsForPrint.remove(
+                                          s['id'].toString(),
+                                        );
                                       }
-                                    });
-                                  },
-                                ),
-                            ],
-                          ),
-                          trailing: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 6,
-                            ),
-                            decoration: BoxDecoration(
-                              color: RecreaTheme.fondoBase,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${roomStudents.length} niños',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                                color: RecreaTheme.oscuro,
+                                    } else {
+                                      for (var s in roomStudents) {
+                                        _selectedStudentIdsForPrint.add(
+                                          s['id'].toString(),
+                                        );
+                                      }
+                                    }
+                                  });
+                                },
                               ),
+                          ],
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 5,
+                          ),
+                          decoration: BoxDecoration(
+                            color: RecreaTheme.fondoBase,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            '${roomStudents.length}',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                              color: RecreaTheme.oscuro,
                             ),
                           ),
-                          children: roomStudents.isEmpty
-                              ? [
-                                  const Padding(
-                                    padding: EdgeInsets.all(16.0),
-                                    child: Text(
-                                      'Sin alumnos matriculados en esta aula.',
-                                      style: TextStyle(
-                                        color: RecreaTheme.textoMudo,
-                                        fontSize: 13,
-                                      ),
+                        ),
+                        children: roomStudents.isEmpty
+                            ? [
+                                const Padding(
+                                  padding: EdgeInsets.all(16.0),
+                                  child: Text(
+                                    'Sin alumnos en esta aula.',
+                                    style: TextStyle(
+                                      color: RecreaTheme.textoMudo,
+                                      fontSize: 13,
                                     ),
                                   ),
-                                ]
-                              : roomStudents.map((s) {
-                                  final String stId = s['id'].toString();
-                                  final bool isSelectedForPrint = _selectedStudentIdsForPrint.contains(stId);
-                                  final docsVerified =
-                                      s['docs_verified'] as bool? ?? false;
-                                  final initial =
-                                      (s['first_names'] as String)[0]
-                                          .toUpperCase();
+                                ),
+                              ]
+                            : roomStudents.map((s) {
+                                final String stId = s['id'].toString();
+                                final bool isSelectedForPrint =
+                                    _selectedStudentIdsForPrint.contains(stId);
+                                final docsVerified =
+                                    s['docs_verified'] as bool? ?? false;
+                                final initial =
+                                    (s['first_names'] as String)[0]
+                                        .toUpperCase();
 
-                                  final studentInfo = Row(
-                                    children: [
-                                      Checkbox(
-                                        value: isSelectedForPrint,
-                                        activeColor: RecreaTheme.turquesa,
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(5)),
-                                        onChanged: (val) {
-                                          setState(() {
-                                            if (val == true) {
-                                              _selectedStudentIdsForPrint.add(stId);
-                                            } else {
-                                              _selectedStudentIdsForPrint.remove(stId);
-                                            }
-                                          });
-                                        },
+                                final studentInfo = Row(
+                                  children: [
+                                    Checkbox(
+                                      value: isSelectedForPrint,
+                                      activeColor: RecreaTheme.turquesa,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(5),
                                       ),
-                                      CircleAvatar(
-                                        radius: 18,
-                                        backgroundColor: isRegular
-                                            ? RecreaTheme.turquesaSuave
-                                            : RecreaTheme.amarilloSuave,
-                                        child: Text(
-                                          initial,
-                                          style: TextStyle(
-                                            color: isRegular
-                                                ? RecreaTheme.turquesa
-                                                : RecreaTheme.amarillo,
-                                            fontWeight: FontWeight.w900,
-                                            fontSize: 14,
+                                      onChanged: (val) {
+                                        setState(() {
+                                          if (val == true) {
+                                            _selectedStudentIdsForPrint.add(
+                                              stId,
+                                            );
+                                          } else {
+                                            _selectedStudentIdsForPrint.remove(
+                                              stId,
+                                            );
+                                          }
+                                        });
+                                      },
+                                    ),
+                                    CircleAvatar(
+                                      radius: 18,
+                                      backgroundColor: isRegular
+                                          ? RecreaTheme.turquesaSuave
+                                          : RecreaTheme.amarilloSuave,
+                                      child: Text(
+                                        initial,
+                                        style: TextStyle(
+                                          color: isRegular
+                                              ? RecreaTheme.turquesa
+                                              : RecreaTheme.amarillo,
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${s['first_names']} ${s['last_names']}',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.w800,
+                                              fontSize: 14,
+                                              color: RecreaTheme.oscuro,
+                                            ),
                                           ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              '${s['first_names']} ${s['last_names']}',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.w800,
-                                                fontSize: 14,
-                                                color: RecreaTheme.oscuro,
-                                              ),
+                                          Text(
+                                            'DNI: ${s['dni']}  •  Alergias: ${s['allergies'] ?? 'Ninguna'}',
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: RecreaTheme.textoMudo,
+                                              fontWeight: FontWeight.w600,
                                             ),
-                                            Text(
-                                              'DNI: ${s['dni']}  •  Alergias: ${s['allergies'] ?? 'Ninguna'}',
-                                              style: const TextStyle(
-                                                fontSize: 12,
-                                                color: RecreaTheme.textoMudo,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              maxLines: 2,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
                                       ),
-                                    ],
-                                  );
+                                    ),
+                                  ],
+                                );
 
-                                  final actionButtons = Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    mainAxisAlignment: isMobileStudent
-                                        ? MainAxisAlignment.end
-                                        : MainAxisAlignment.start,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.badge_rounded,
-                                          color: RecreaTheme.oscuro,
-                                          size: 20,
-                                        ),
-                                        tooltip: 'Imprimir Carnet Individual',
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onPressed: () => CarnetPdfService.printCarnets([s]),
+                                final actionButtons = Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: isMobileStudent
+                                      ? MainAxisAlignment.end
+                                      : MainAxisAlignment.start,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.badge_rounded,
+                                        color: RecreaTheme.oscuro,
+                                        size: 20,
                                       ),
-                                      const SizedBox(width: 12),
-                                      IconButton(
-                                        icon: const Icon(
-                                          Icons.folder_shared_rounded,
-                                          color: RecreaTheme.turquesa,
-                                          size: 22,
-                                        ),
-                                        tooltip: 'Ver Documentos',
-                                        padding: EdgeInsets.zero,
-                                        constraints: const BoxConstraints(),
-                                        onPressed: () => _showStudentDocsDialog(
-                                          Map<String, dynamic>.from(s),
-                                        ),
+                                      tooltip: 'Imprimir Carnet',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () =>
+                                          CarnetPdfService.printCarnets([s]),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.folder_shared_rounded,
+                                        color: RecreaTheme.turquesa,
+                                        size: 22,
                                       ),
-                                      const SizedBox(width: 12),
-                                      InkWell(
-                                        onTap: _updatingStudentId == s['id']
-                                            ? null
-                                            : () => _toggleDocsVerified(
+                                      tooltip: 'Ver Documentos',
+                                      padding: EdgeInsets.zero,
+                                      constraints: const BoxConstraints(),
+                                      onPressed: () => _showStudentDocsDialog(
+                                        Map<String, dynamic>.from(s),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    InkWell(
+                                      onTap: _updatingStudentId == s['id']
+                                          ? null
+                                          : () => _toggleDocsVerified(
                                                 s['id'] as String,
                                                 docsVerified,
                                               ),
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: AnimatedContainer(
-                                          duration: const Duration(
-                                            milliseconds: 200,
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 200,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 8,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: docsVerified
+                                              ? RecreaTheme.verdeSuave
+                                              : RecreaTheme.amarilloSuave,
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                          padding: const EdgeInsets.symmetric(
-                                            horizontal: 10,
-                                            vertical: 8,
-                                          ),
-                                          decoration: BoxDecoration(
-                                            color: docsVerified
-                                                ? RecreaTheme.verdeSuave
-                                                : RecreaTheme.amarilloSuave,
-                                            borderRadius: BorderRadius.circular(
-                                              10,
-                                            ),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              if (_updatingStudentId == s['id'])
-                                                SizedBox(
-                                                  width: 14,
-                                                  height: 14,
-                                                  child:
-                                                      CircularProgressIndicator(
-                                                        strokeWidth: 2,
-                                                        color: docsVerified
-                                                            ? Colors.green[800]
-                                                            : Colors
-                                                                  .orange[800],
-                                                      ),
-                                                )
-                                              else
-                                                Icon(
-                                                  docsVerified
-                                                      ? Icons.verified_rounded
-                                                      : Icons
-                                                            .pending_actions_rounded,
-                                                  color: docsVerified
-                                                      ? RecreaTheme.verde
-                                                      : RecreaTheme.amarillo,
-                                                  size: 15,
-                                                ),
-                                              const SizedBox(width: 6),
-                                              Text(
-                                                docsVerified
-                                                    ? 'Docs OK'
-                                                    : 'Faltan Docs',
-                                                style: TextStyle(
-                                                  fontSize: 11,
-                                                  height: 1.0,
-                                                  fontWeight: FontWeight.bold,
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (_updatingStudentId == s['id'])
+                                              SizedBox(
+                                                width: 14,
+                                                height: 14,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                  strokeWidth: 2,
                                                   color: docsVerified
                                                       ? Colors.green[800]
                                                       : Colors.orange[800],
                                                 ),
+                                              )
+                                            else
+                                              Icon(
+                                                docsVerified
+                                                    ? Icons.verified_rounded
+                                                    : Icons
+                                                        .pending_actions_rounded,
+                                                color: docsVerified
+                                                    ? RecreaTheme.verde
+                                                    : RecreaTheme.amarillo,
+                                                size: 15,
                                               ),
-                                            ],
-                                          ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              docsVerified
+                                                  ? 'Docs OK'
+                                                  : 'Faltan Docs',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                height: 1.0,
+                                                fontWeight: FontWeight.bold,
+                                                color: docsVerified
+                                                    ? Colors.green[800]
+                                                    : Colors.orange[800],
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  );
+                                    ),
+                                  ],
+                                );
 
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 12,
-                                    ),
-                                    decoration: const BoxDecoration(
-                                      border: Border(
-                                        top: BorderSide(
-                                          color: RecreaTheme.bordeClaro,
-                                          width: 0.8,
-                                        ),
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
+                                  ),
+                                  decoration: const BoxDecoration(
+                                    border: Border(
+                                      top: BorderSide(
+                                        color: RecreaTheme.bordeClaro,
+                                        width: 0.8,
                                       ),
                                     ),
-                                    child: isMobileStudent
-                                        ? Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              studentInfo,
-                                              const SizedBox(height: 12),
-                                              actionButtons,
-                                            ],
-                                          )
-                                        : Row(
-                                            children: [
-                                              Expanded(child: studentInfo),
-                                              const SizedBox(width: 8),
-                                              actionButtons,
-                                            ],
-                                          ),
-                                  );
-                                }).toList(),
-                        ),
+                                  ),
+                                  child: isMobileStudent
+                                      ? Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            studentInfo,
+                                            const SizedBox(height: 10),
+                                            actionButtons,
+                                          ],
+                                        )
+                                      : Row(
+                                          children: [
+                                            Expanded(child: studentInfo),
+                                            const SizedBox(width: 8),
+                                            actionButtons,
+                                          ],
+                                        ),
+                                );
+                              }).toList(),
                       ),
-                    );
-                  },
-                ),
-        ),
+                    ),
+                  );
+                },
+                childCount: _classrooms.length,
+              ),
+            ),
+          ),
       ],
     );
   }
@@ -1388,12 +1436,17 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
         int columns = constraints.maxWidth > 1000
             ? 3
             : constraints.maxWidth > 600
-            ? 2
-            : 1;
+                ? 2
+                : 1;
         final isMobile = columns == 1;
 
         return GridView.builder(
-          padding: EdgeInsets.all(isMobile ? 16 : 24),
+          padding: EdgeInsets.fromLTRB(
+            isMobile ? 16 : 24,
+            16,
+            isMobile ? 16 : 24,
+            90,
+          ),
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             mainAxisExtent: isMobile ? 120 : 130,
@@ -1441,21 +1494,15 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                c['name'] as String,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 16,
-                                  color: RecreaTheme.oscuro,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
+                        Text(
+                          c['name'] as String,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
+                            color: RecreaTheme.oscuro,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 2),
                         Text(
@@ -1494,10 +1541,15 @@ class _EnrollmentScreenState extends State<EnrollmentScreen>
                             ),
                             if (_role == 'admin')
                               InkWell(
-                                onTap: () => _showAssignTeacherDialog(Map<String, dynamic>.from(c)),
+                                onTap: () => _showAssignTeacherDialog(
+                                  Map<String, dynamic>.from(c),
+                                ),
                                 borderRadius: BorderRadius.circular(10),
                                 child: Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 6,
+                                  ),
                                   decoration: BoxDecoration(
                                     color: RecreaTheme.turquesaSuave,
                                     borderRadius: BorderRadius.circular(10),

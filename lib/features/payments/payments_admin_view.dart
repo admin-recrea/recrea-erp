@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:recrea_app/core/widgets/auto_collapse_fab.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:intl/intl.dart';
@@ -258,66 +259,80 @@ Future<void> _showCreateChargeDialog() async {
 
   @override
   Widget build(BuildContext context) {
+    final isDesktop = MediaQuery.of(context).size.width >= 900;
     final pendingList = _payments.where((p) => p['status'] != 'PAGADO').toList();
     final approvedList = _payments.where((p) => p['status'] == 'PAGADO').toList();
 
     return Scaffold(
       backgroundColor: RecreaTheme.fondoBase,
-      // ELIMINA LA PROPIEDAD appBar POR COMPLETO
       body: _isLoading
           ? const Center(child: CircularProgressIndicator(color: RecreaTheme.turquesa))
-          : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // 1. HEADER INTEGRADO
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(24, 24, 24, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Tesorería y Vouchers', 
-                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: RecreaTheme.oscuro)
-                      ),
-                      Text(
-                        'Valida comprobantes pendientes y consulta pagos por aula y alumno', 
-                        style: TextStyle(fontSize: 13, color: RecreaTheme.textoMudo)
-                      ),
-                    ],
-                  ),
-                ),
-                // 2. TABBAR INTEGRADO
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: RecreaTheme.turquesa,
-                  indicatorWeight: 3,
-                  labelColor: RecreaTheme.turquesa,
-                  unselectedLabelColor: RecreaTheme.textoMudo,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                  tabs: [
-                    Tab(icon: const Icon(Icons.pending_actions_rounded), text: 'Por Validar (${pendingList.length})'),
-                    Tab(icon: const Icon(Icons.folder_shared_rounded), text: 'Pagados por Aula (${approvedList.length})'),
-                  ],
-                ),
-                // 3. CONTENIDO EXPANDIDO
-                Expanded(
-                  child: TabBarView(
+          : NestedScrollView(
+              floatHeaderSlivers: true,
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                SliverAppBar(
+                  primary: false,
+                  automaticallyImplyLeading: false,
+                  floating: true,
+                  snap: true,
+                  pinned: false,
+                  elevation: 0,
+                  backgroundColor: RecreaTheme.fondoBase,
+                  toolbarHeight: isDesktop ? 64 : 0,
+                  title: isDesktop
+                      ? const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Text(
+                            'Tesorería',
+                            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: RecreaTheme.oscuro),
+                          ),
+                        )
+                      : null,
+                  bottom: TabBar(
                     controller: _tabController,
-                    children: [
-                      _buildPendingPaymentsGrid(pendingList),
-                      _buildApprovedByClassroomView(approvedList),
+                    indicatorColor: RecreaTheme.turquesa,
+                    indicatorWeight: 3,
+                    labelColor: RecreaTheme.turquesa,
+                    unselectedLabelColor: RecreaTheme.textoMudo,
+                    labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    tabs: [
+                      Tab(
+                        height: 44,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.pending_actions_rounded, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Por Validar (${pendingList.length})'),
+                          ],
+                        ),
+                      ),
+                      Tab(
+                        height: 44,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.folder_shared_rounded, size: 18),
+                            const SizedBox(width: 6),
+                            Text('Pagados (${approvedList.length})'),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ],
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildPendingPaymentsGrid(pendingList),
+                  _buildApprovedByClassroomView(approvedList),
+                ],
+              ),
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        heroTag: null,
-        backgroundColor: RecreaTheme.rosa,
-        foregroundColor: RecreaTheme.blanco,
-        elevation: 4,
-        icon: const Icon(Icons.add_card_rounded),
-        label: const Text('Registrar Pago / Cargo', style: TextStyle(fontWeight: FontWeight.bold)),
+      floatingActionButton: AutoCollapseFab(
+        label: 'Registrar Pago',
+        expandedIcon: Icons.add_card_rounded,
         onPressed: _showCreateChargeDialog,
       ),
     );
@@ -345,12 +360,12 @@ Future<void> _showCreateChargeDialog() async {
       int columns = constraints.maxWidth > 1200 ? 3 : constraints.maxWidth > 750 ? 2 : 1;
 
       return GridView.builder(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.fromLTRB(columns == 1 ? 16 : 24, 16, columns == 1 ? 16 : 24, 90),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
           crossAxisCount: columns,
-          childAspectRatio: columns == 1 ? 2.1 : 1.75,
-          crossAxisSpacing: 20,
-          mainAxisSpacing: 20,
+          mainAxisExtent: 195,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
         ),
         itemCount: list.length,
         itemBuilder: (context, i) {
