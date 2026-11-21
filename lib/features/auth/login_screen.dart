@@ -352,61 +352,179 @@ class _LoginScreenState extends ConsumerState<LoginScreen>
   }
 
   // ===========================================================================
-  // VISTA CELULAR Y TABLET (Se mantiene igual)
+  // VISTA CELULAR Y TABLET (Solo Móvil - Playful Pastel Animado)
   // ===========================================================================
   Widget _buildMobileTabletLayout() {
-    return Stack(
-      children: [
-        Container(
-          height: 290,
-          width: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [RecreaTheme.turquesa, Color(0xFF67D4FF)],
-            ),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(40),
-              bottomRight: Radius.circular(40),
-            ),
-          ),
+    return Container(
+      width: double.infinity,
+      height: double.infinity,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFE0F4FF),
+            Color(0xFFFDF2F8),
+            Color(0xFFF4F9E9),
+          ],
         ),
-        SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 440),
-                child: Column(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 28,
-                        vertical: 18,
-                      ),
-                      decoration: BoxDecoration(
-                        color: RecreaTheme.blanco,
-                        borderRadius: BorderRadius.circular(26),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 20,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: _buildMainLogo(height: 75),
+      ),
+      child: Stack(
+        children: [
+          // Burbujas decorativas flotantes (reutiliza tu _floatController)
+          AnimatedBuilder(
+            animation: _floatController,
+            builder: (context, _) {
+              return Stack(
+                children: [
+                  Positioned(
+                    top: -50 + _floatAnim1.value,
+                    left: -50 + _floatAnim2.value,
+                    child: _buildDecorativeCircle(
+                      180,
+                      RecreaTheme.turquesa.withValues(alpha: 0.14),
                     ),
-                    const SizedBox(height: 20),
-                    _buildLoginFormCard(isMobile: true),
-                  ],
+                  ),
+                  Positioned(
+                    top: 110 + _floatAnim2.value,
+                    right: -45 + _floatAnim1.value,
+                    child: _buildDecorativeCircle(
+                      130,
+                      RecreaTheme.rosa.withValues(alpha: 0.12),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: -40 + _floatAnim1.value,
+                    right: -30 + _floatAnim2.value,
+                    child: _buildDecorativeCircle(
+                      200,
+                      RecreaTheme.amarillo.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  Positioned(
+                    bottom: 90 + _floatAnim2.value,
+                    left: -30 + _floatAnim1.value,
+                    child: _buildDecorativeCircle(
+                      90,
+                      RecreaTheme.verde.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+
+          // Contenido principal adaptable al teclado
+          SafeArea(
+            child: Center(
+              child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 420),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Badge superior
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: RecreaTheme.blanco.withValues(alpha: 0.9),
+                          borderRadius: BorderRadius.circular(30),
+                          border: Border.all(color: RecreaTheme.blanco, width: 1.5),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.auto_awesome_rounded, color: RecreaTheme.turquesa, size: 15),
+                            SizedBox(width: 6),
+                            Text(
+                              'Intranet • Recrea Centro Infantil',
+                              style: TextStyle(
+                                color: RecreaTheme.oscuro,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Tarjeta de Logo limpia
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: RecreaTheme.blanco,
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: RecreaTheme.turquesa.withValues(alpha: 0.10),
+                              blurRadius: 22,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: _buildMainLogo(height: 78),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Slogan compacto
+                      const Text(
+                        'Conectando a la familia con cada pequeño gran logro',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: RecreaTheme.textoMudo,
+                          height: 1.3,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+
+                      // Tu formulario intacto
+                      _buildLoginFormCard(isMobile: true),
+                      const SizedBox(height: 18),
+
+                      // Cápsula compacta de valores (con Wrap para 0 overflow en pantallas chicas)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: RecreaTheme.blanco.withValues(alpha: 0.78),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: RecreaTheme.blanco, width: 1.5),
+                        ),
+                        child: const Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 16,
+                          runSpacing: 8,
+                          children: [
+                            _MobileValueChip(
+                              icon: Icons.favorite_rounded,
+                              label: 'Amor',
+                              color: RecreaTheme.rosa,
+                            ),
+                            _MobileValueChip(
+                              icon: Icons.extension_rounded,
+                              label: 'Juego',
+                              color: RecreaTheme.turquesa,
+                            ),
+                            _MobileValueChip(
+                              icon: Icons.palette_rounded,
+                              label: 'Creatividad',
+                              color: RecreaTheme.amarillo,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -653,6 +771,43 @@ class _AnimatedValueTagState extends State<_AnimatedValueTag> {
           ],
         ),
       ),
+    );
+  }
+}
+class _MobileValueChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+
+  const _MobileValueChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(6),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.18),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 14),
+        ),
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+            color: RecreaTheme.oscuro,
+          ),
+        ),
+      ],
     );
   }
 }

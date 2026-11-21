@@ -609,6 +609,7 @@ class _EnrollmentParentViewState extends State<EnrollmentParentView> {
               children: [
                 DropdownButtonFormField(
                   value: _selectedClassroomId,
+                  isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Selecciona el Aula / Turno'),
                   items: _classrooms.map((c) {
                     return DropdownMenuItem(
