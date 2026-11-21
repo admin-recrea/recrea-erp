@@ -36,6 +36,7 @@ class RecreaApp extends ConsumerWidget {
           PointerDeviceKind.trackpad,
         },
       ),
+      
     );
   }
 }
